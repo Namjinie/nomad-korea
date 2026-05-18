@@ -1,8 +1,14 @@
-import { Button } from "@/components/ui/button";
-import { Menu } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { signOut } from "@/app/auth/actions";
 
-export default function Navbar() {
+export default async function Navbar() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <nav className="sticky top-0 z-50 border-b bg-white">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -11,31 +17,27 @@ export default function Navbar() {
           <span className="text-xl font-bold text-indigo-600">노마드코리아</span>
         </Link>
 
-        <div className="hidden items-center gap-6 md:flex">
-          <Link
-            href="/cities"
-            className="text-sm font-medium text-gray-600 transition-colors hover:text-indigo-600"
-          >
-            도시 탐색
-          </Link>
-          <Link
-            href="#review"
-            className="text-sm font-medium text-gray-600 transition-colors hover:text-indigo-600"
-          >
-            평가 남기기
-          </Link>
-        </div>
-
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm">
-            로그인
-          </Button>
-          <Button size="sm">회원가입</Button>
+          {user ? (
+            <>
+              <span className="text-sm text-gray-600">{user.email}</span>
+              <form action={signOut}>
+                <Button type="submit" variant="ghost" size="sm">
+                  로그아웃
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                로그인
+              </Link>
+              <Link href="/register" className={buttonVariants({ size: "sm" })}>
+                회원가입
+              </Link>
+            </>
+          )}
         </div>
-
-        <button className="md:hidden">
-          <Menu className="h-6 w-6 text-gray-600" />
-        </button>
       </div>
     </nav>
   );

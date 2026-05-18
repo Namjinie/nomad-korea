@@ -16,7 +16,7 @@ export default function TopCitiesSection() {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {top3.map((city) => (
-            <CityCard key={city.slug} city={city} showRank />
+            <CityCard key={city.slug} city={city} />
           ))}
         </div>
       </div>

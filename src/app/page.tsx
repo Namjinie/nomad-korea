@@ -1,26 +1,26 @@
 import HeroSection from "@/components/home/HeroSection";
-import TopCitiesSection from "@/components/home/TopCitiesSection";
-import CityGrid from "@/components/cities/CityGrid";
+import CityListSection from "@/components/cities/CityListSection";
 import RecentReviewsSection from "@/components/home/RecentReviewsSection";
 import SeasonalRecommendations from "@/components/home/SeasonalRecommendations";
 import CtaBanner from "@/components/home/CtaBanner";
+import { createClient } from "@/lib/supabase/server";
+import { getCities, getUserReactions } from "@/lib/supabase/queries";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const [cities, userReactions] = await Promise.all([
+    getCities(),
+    user ? getUserReactions(user.id) : Promise.resolve({}),
+  ]);
+
   return (
     <>
       <HeroSection />
-      <TopCitiesSection />
-
-      <section className="bg-gray-50 py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 sm:text-3xl">전체 도시 탐색</h2>
-            <p className="mt-2 text-gray-500">조건에 맞는 도시를 찾아보세요</p>
-          </div>
-          <CityGrid />
-        </div>
-      </section>
-
+      <CityListSection initialCities={cities} userReactions={userReactions} />
       <RecentReviewsSection />
       <SeasonalRecommendations />
       <CtaBanner />

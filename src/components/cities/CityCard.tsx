@@ -1,8 +1,40 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Wifi, Star, Shield } from "lucide-react";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
 import { City } from "@/lib/mock-data";
+import { toggleReaction } from "@/app/actions/reactions";
+
+export function calcCounts(
+  cityLikes: number,
+  cityDislikes: number,
+  reaction: "like" | "dislike" | null,
+  initialReaction: "like" | "dislike" | null
+): { likeCount: number; dislikeCount: number } {
+  return {
+    likeCount:
+      cityLikes +
+      (reaction === "like" ? 1 : 0) -
+      (initialReaction === "like" ? 1 : 0),
+    dislikeCount:
+      cityDislikes +
+      (reaction === "dislike" ? 1 : 0) -
+      (initialReaction === "dislike" ? 1 : 0),
+  };
+}
+
+export function calcGradientIndex(slug: string, mapLength: number): number {
+  return slug.split("").reduce((sum, c) => sum + c.charCodeAt(0), 0) % mapLength;
+}
+
+export function calcNextReaction(
+  current: "like" | "dislike" | null,
+  type: "like" | "dislike"
+): "like" | "dislike" | null {
+  return current === type ? null : type;
+}
 
 const GRADIENT_MAP = [
   "from-blue-400 to-cyan-500",
@@ -15,36 +47,58 @@ const GRADIENT_MAP = [
   "from-teal-400 to-green-500",
 ];
 
-const SAFETY_COLOR: Record<string, string> = {
-  매우좋음: "bg-green-100 text-green-700",
-  좋음: "bg-blue-100 text-blue-700",
-  보통: "bg-yellow-100 text-yellow-700",
-  나쁨: "bg-red-100 text-red-700",
+const BUDGET_LABEL: Record<string, string> = {
+  under100: "100만원 이하",
+  "100to200": "100~200만원",
+  over200: "200만원 이상",
+};
+
+const SEASON_EMOJI: Record<string, string> = {
+  봄: "🌸",
+  여름: "☀️",
+  가을: "🍂",
+  겨울: "❄️",
 };
 
 interface CityCardProps {
   city: City;
-  showRank?: boolean;
+  initialReaction?: "like" | "dislike" | null;
 }
 
-export default function CityCard({ city, showRank = false }: CityCardProps) {
-  const gradient = GRADIENT_MAP[(city.rank - 1) % GRADIENT_MAP.length];
-  const weatherEmoji = city.weather.icon === "sunny" ? "☀️" : city.weather.icon === "rainy" ? "🌧️" : "☁️";
+export default function CityCard({
+  city,
+  initialReaction = null,
+}: CityCardProps) {
+  const [reaction, setReaction] = useState<"like" | "dislike" | null>(
+    initialReaction,
+  );
+  const [isPending, startTransition] = useTransition();
+
+  // DB의 likes/dislikes는 initialReaction 포함 → 낙관적 UI 보정
+  const { likeCount, dislikeCount } = calcCounts(
+    city.likes,
+    city.dislikes,
+    reaction,
+    initialReaction,
+  );
+
+  const handleReaction = (type: "like" | "dislike") => {
+    const next = calcNextReaction(reaction, type);
+    setReaction(next);
+    startTransition(async () => {
+      const result = await toggleReaction(city.slug, type);
+      if (result.error === "login_required") {
+        setReaction(reaction); // 롤백
+      }
+    });
+  };
+
+  const gradientIndex = calcGradientIndex(city.slug, GRADIENT_MAP.length);
+  const gradient = GRADIENT_MAP[gradientIndex];
 
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-lg">
       <div className={`relative h-40 bg-gradient-to-br ${gradient}`}>
-        {showRank && (
-          <div className="absolute left-3 top-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-bold text-indigo-600 shadow">
-              {city.rank}위
-            </span>
-          </div>
-        )}
-        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-sm font-medium text-gray-700">
-          <span>{weatherEmoji}</span>
-          <span>{city.weather.temp}°C</span>
-        </div>
         <div className="absolute bottom-3 left-3 text-white">
           <div className="text-lg font-bold">{city.name}</div>
           <div className="text-xs text-white/80">{city.region}</div>
@@ -52,52 +106,58 @@ export default function CityCard({ city, showRank = false }: CityCardProps) {
       </div>
 
       <CardContent className="p-4">
-        <div className="mb-3">
-          <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-700">노마드 종합점수</span>
-            <span className="font-bold text-indigo-600">{city.score}점</span>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <dt className="text-gray-500">예산</dt>
+            <dd className="font-medium text-gray-800">
+              {BUDGET_LABEL[city.budget]}
+            </dd>
           </div>
-          <Progress value={city.score} className="h-2" />
-        </div>
+          <div className="flex justify-between">
+            <dt className="text-gray-500">지역</dt>
+            <dd className="font-medium text-gray-800">{city.regionFilter}</dd>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <dt className="shrink-0 text-gray-500">환경</dt>
+            <dd className="flex flex-wrap justify-end gap-1">
+              {city.environment.map((env) => (
+                <Badge key={env} variant="secondary" className="text-xs">
+                  {env}
+                </Badge>
+              ))}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-gray-500">최고 계절</dt>
+            <dd className="font-medium text-gray-800">
+              {SEASON_EMOJI[city.bestSeason]} {city.bestSeason}
+            </dd>
+          </div>
+        </dl>
 
-        <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <span className="text-gray-500">월 생활비</span>
-            <div className="font-semibold text-gray-800">{city.monthlyCost}만원~</div>
-          </div>
-          <div>
-            <span className="text-gray-500">인터넷</span>
-            <div className="flex items-center gap-1 font-semibold text-gray-800">
-              <Wifi className="h-3 w-3 text-indigo-500" />
-              {city.internetSpeed} Mbps
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-3 flex items-center gap-1">
-          <Shield className="h-3 w-3 text-gray-400" />
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${SAFETY_COLOR[city.safety]}`}
+        <div className="mt-3 flex gap-4 border-t pt-3">
+          <button
+            onClick={() => handleReaction("like")}
+            disabled={isPending}
+            className="flex items-center gap-1 text-sm disabled:opacity-60"
+            aria-label="좋아요"
           >
-            안전 {city.safety}
-          </span>
-        </div>
-
-        <div className="mb-3 flex flex-wrap gap-1">
-          {city.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between border-t pt-3 text-sm text-gray-600">
-          <div className="flex items-center gap-1">
-            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="font-medium">{city.rating}</span>
-            <span className="text-gray-400">({city.reviewCount})</span>
-          </div>
-          <span className="text-xs text-gray-400">노마드 {city.nomadCount}명</span>
+            <ThumbsUp
+              className={`h-4 w-4 ${reaction === "like" ? "text-indigo-600" : "text-gray-400"}`}
+            />
+            <span>{likeCount}</span>
+          </button>
+          <button
+            onClick={() => handleReaction("dislike")}
+            disabled={isPending}
+            className="flex items-center gap-1 text-sm disabled:opacity-60"
+            aria-label="싫어요"
+          >
+            <ThumbsDown
+              className={`h-4 w-4 ${reaction === "dislike" ? "text-red-500" : "text-gray-400"}`}
+            />
+            <span>{dislikeCount}</span>
+          </button>
         </div>
       </CardContent>
     </Card>

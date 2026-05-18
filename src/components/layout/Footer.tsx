@@ -21,11 +21,6 @@ export default function Footer() {
             </h3>
             <ul className="mt-4 space-y-2 text-sm">
               <li>
-                <Link href="/cities" className="hover:text-white transition-colors">
-                  도시 탐색
-                </Link>
-              </li>
-              <li>
                 <Link href="#" className="hover:text-white transition-colors">
                   평가 남기기
                 </Link>
